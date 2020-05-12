@@ -63,7 +63,7 @@ fn to_circle(img: DynamicImage, size: u32) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-fn process_image(img: &DynamicImage, circle: bool, grayscale: bool, size: u32, quality: u8) -> Vec<u8> {
+fn process_image(img: &DynamicImage, circle: bool, grayscale: bool, size: u32) -> DynamicImage {
     let mut resized = if circle {
         to_circle(img.clone().into(), size)
     } else {
@@ -74,13 +74,17 @@ fn process_image(img: &DynamicImage, circle: bool, grayscale: bool, size: u32, q
         resized = DynamicImage::ImageLuma8(resized.to_luma());
     }
 
+    resized
+}
+
+fn encode_image(img: &DynamicImage, quality: u8) -> Vec<u8> {
     let mut buffer = Vec::new();
     let encoder = jpeg::JPEGEncoder::new_with_quality(&mut buffer, quality);
     encoder.write_image(
-        &resized.to_bytes(),
-        resized.width(),
-        resized.height(),
-        resized.color()).unwrap();
+        &img.to_bytes(),
+        img.width(),
+        img.height(),
+        img.color()).unwrap();
     println!("Quality: {:3}, File size: {:6}", quality, buffer.len());
     buffer
 }
@@ -92,27 +96,23 @@ fn main() -> Result<(), Box<dyn Error>>{
 
     let mut buffer = Vec::new();
 
+    let processed = process_image(
+        &img,
+        opts.circle,
+        opts.grayscale,
+        opts.size
+    );
+
     if let Some(max_filesize) = opts.max_filesize {
         let mut quality: i32 = 100;
         // not small enough or first iteration?
         while (buffer.len() > max_filesize || buffer.is_empty()) && quality >= 0 {
-            buffer = process_image(
-                &img,
-                opts.circle,
-                opts.grayscale,
-                opts.size,
-                quality as u8
-            );
-            quality = quality - 10;
+            buffer = encode_image(&processed, quality as u8);
+
+            quality = quality - 5;
         }
     } else {
-        buffer = process_image(
-            &img,
-            opts.circle,
-            opts.grayscale,
-            opts.size,
-            opts.quality
-        );
+        buffer = encode_image(&processed, opts.quality);
     }
 
     let encoded = match opts.encoding.as_str() {
