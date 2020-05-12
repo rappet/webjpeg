@@ -1,27 +1,39 @@
 extern crate image;
+extern crate base64;
 
 use std::error::Error;
 use image::imageops::FilterType;
 use image::{DynamicImage, ImageEncoder, GenericImageView};
 use image::jpeg;
 use std::fs;
+use std::io;
 use clap::Clap;
 
 #[derive(Clap)]
 #[clap(version = "0.1", author = "Raphael Peters <raphael.r.peters@gmail.com>")]
 struct Opts {
+    #[clap(about = "Input file in PNG/JPEG/GIF/BMP/ICO/TIFF/.... (see https://docs.rs/image/0.23.4/image/ )")]
     input: String,
+    #[clap(about = "Output file as JPEG")]
     output: String,
-    #[clap(short, long, default_value = "200")]
+    #[clap(short, long, default_value = "200",
+        about = "Dimensions of the image. The image will be created to a square.")]
     size: u32,
-    #[clap(short, long)]
-    quality: Option<u8>,
-    #[clap(short, long)]
+    #[clap(short, long, default_value = "75",
+        about = "Quality of the JPEG image. Will be ignored if --max-filesize is set.")]
+    quality: u8,
+    #[clap(short, long,
+        about = "Cut the contents to a circle without adding additional JPEG artifacts.")]
     circle: bool,
-    #[clap(short, long)]
+    #[clap(short, long,
+        about = "Iterate the JPEG quality down until the filesize is smaller than the value.")]
     max_filesize: Option<usize>,
-    #[clap(short, long)]
+    #[clap(short, long,
+        about = "Save the image as grayscale. This file should allways be set if the source data is grayscale.")]
     grayscale: bool,
+    #[clap(short, long, default_value = "raw",
+        about = "Output encoding format. Available formats are raw (JPEG), base64 and dataurl")]
+    encoding: String,
 }
 
 fn in_circle(x: i64, y: i64, diameter: i64) -> bool {
@@ -89,7 +101,7 @@ fn main() -> Result<(), Box<dyn Error>>{
                 opts.circle,
                 opts.grayscale,
                 opts.size,
-                opts.quality.unwrap_or(quality as u8)
+                quality as u8
             );
             quality = quality - 10;
         }
@@ -99,11 +111,18 @@ fn main() -> Result<(), Box<dyn Error>>{
             opts.circle,
             opts.grayscale,
             opts.size,
-            opts.quality.unwrap_or(75)
+            opts.quality
         );
     }
 
-    fs::write(opts.output, &buffer)?;
+    let encoded = match opts.encoding.as_str() {
+        "raw" | "jpeg" => buffer,
+        "base64" => base64::encode(&buffer).into_bytes(),
+        "dataurl" => format!("data:image/jpeg;base64,{}", base64::encode(&buffer)).into_bytes(),
+        _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Unknown encoding formmat"))?
+    };
+
+    fs::write(opts.output, &encoded)?;
 
     Ok(())
 }
