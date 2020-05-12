@@ -7,7 +7,7 @@ Image data outside of the circle will be removed without creating additional JPE
 
 ```bash
 cargo build --release
-cargo install --path <path>
+cargo install --path .
 ```
 
 ## Usage
